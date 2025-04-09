@@ -1,0 +1,10 @@
+*.pyc
+result
+*.DS_Store
+__pycache__
+.vs
+result.obj
+data/
+*.npy
+*.npz
+venv/
