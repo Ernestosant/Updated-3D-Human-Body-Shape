@@ -1,22 +1,16 @@
-# First, and before importing any Enthought packages, set the ETS_TOOLKIT
-# environment variable to qt4, to tell Traits that we will use Qt.
+#!/usr/bin/python
+# coding=utf-8
 
-from mayavi.core.ui.api import MayaviScene, MlabSceneModel, SceneEditor
-from traits.api import HasTraits, Instance, on_trait_change
-from traitsui.api import View, Item
-from mayavi import mlab
-from PyQt5 import QtWidgets, QtCore
+import os
 import numpy as np
 import time
-import os
-from reshaper import Reshaper
+from PyQt5 import QtWidgets, QtCore
+import vtk
+from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import utils
-os.environ['ETS_TOOLKIT'] = 'qt4'
+from reshaper import Reshaper
 
-
-# A QSlider with its own ID, used to determine which PC it corresponds to
-# Customized signal. Agment original valueChanged(int) with sliderID, and
-# the min, max values of the slider
+# Clase para señales de slider personalizado
 class IndexedQSlider(QtWidgets.QSlider):
   valueChangeForwarded = QtCore.pyqtSignal(int, int, int, int)
   def __init__(self, sliderID, orientation, parent=None):
@@ -24,11 +18,12 @@ class IndexedQSlider(QtWidgets.QSlider):
     self.sliderID = sliderID
     self.valueChanged.connect(self.valueChangeForwarder)
 
-  ''' Emit coustomized valuechanged sigmal '''
+  # Emitir señal de cambio de valor personalizada
   def valueChangeForwarder(self, val):
     self.valueChangeForwarded.emit(
       self.sliderID, val, self.minimum(), self.maximum())
 
+# Acción personalizada para menú
 class myAction(QtWidgets.QAction):
   myact = QtCore.pyqtSignal(int)
   def __init__(self, _id, *args):
@@ -39,33 +34,44 @@ class myAction(QtWidgets.QAction):
   def emitSelect(self):
     self.myact.emit(self._id)
 
-class Visualization(HasTraits):
-  scene = Instance(MlabSceneModel, ())
-  @on_trait_change('scene.activated')
-  def update_plot(self, v, f):
-    mlab.clf()
-    if not isinstance(v, str):
-      mlab.triangular_mesh(v[:, 0], v[:, 1], v[:, 2], f)
-  # the layout of the dialog screated
-  view = View(Item('scene', editor=SceneEditor(scene_class=MayaviScene),
-    height=200, width=250, show_label=False), resizable=True)
-
-# The QWidget for rendering 3D shape
+# Widget para renderizar el modelo 3D con VTK
 class MayaviQWidget(QtWidgets.QWidget):
   def __init__(self, parent):
     QtWidgets.QWidget.__init__(self, parent)
     layout = QtWidgets.QVBoxLayout(self)
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(0)
-    self.visualization = Visualization()
-
-    # The edit_traits call will generate the widget to embed.
-    self.ui = self.visualization.edit_traits(parent=self, kind='subpanel').control
-    layout.addWidget(self.ui)
-    self.ui.setParent(self)
-
-    # models for shape representing
-    self.bodies = {"female": Reshaper(label="female"), "male":Reshaper(label="male")}
+    
+    # Crear el widget VTK
+    self.vtk_widget = QVTKRenderWindowInteractor(self)
+    layout.addWidget(self.vtk_widget)
+    
+    # Configurar el renderizador VTK
+    self.renderer = vtk.vtkRenderer()
+    self.vtk_widget.GetRenderWindow().AddRenderer(self.renderer)
+    self.interactor = self.vtk_widget.GetRenderWindow().GetInteractor()
+    
+    # Crear la fuente de datos para la malla
+    self.mesh_source = vtk.vtkPolyData()
+    self.points = vtk.vtkPoints()
+    self.cells = vtk.vtkCellArray()
+    
+    # Crear el mapper y actor para la malla
+    self.mesh_mapper = vtk.vtkPolyDataMapper()
+    self.mesh_actor = vtk.vtkActor()
+    self.mesh_actor.SetMapper(self.mesh_mapper)
+    
+    # Configurar el aspecto de la malla
+    self.mesh_actor.GetProperty().SetColor(0.8, 0.8, 0.8)
+    self.mesh_actor.GetProperty().SetSpecular(0.3)
+    self.mesh_actor.GetProperty().SetSpecularPower(20)
+    
+    # Añadir el actor al renderizador
+    self.renderer.AddActor(self.mesh_actor)
+    self.renderer.SetBackground(0.1, 0.1, 0.1)
+    
+    # Inicializar los modelos del cuerpo
+    self.bodies = {"female": Reshaper(label="female"), "male": Reshaper(label="male")}
     self.body = self.bodies["female"]
     self.flag_ = 0
 
@@ -73,13 +79,52 @@ class MayaviQWidget(QtWidgets.QWidget):
     self.normals = self.body.normals
     self.facets = self.body.facets
     self.input_data = np.zeros((utils.M_NUM, 1))
+    
+    # Iniciar el renderizado
+    self.interactor.Initialize()
+    
+    # Actualizar visualización
     self.update()
 
   def update(self):
     [self.vertices, self.normals, self.facets] = \
         self.body.mapping(self.input_data, self.flag_)
     self.vertices = self.vertices.astype('float32')
-    self.visualization.update_plot(self.vertices, self.facets)
+    
+    # Actualizar los puntos de la malla
+    self.points = vtk.vtkPoints()
+    for i in range(len(self.vertices)):
+        self.points.InsertNextPoint(self.vertices[i][0], self.vertices[i][1], self.vertices[i][2])
+    
+    # Actualizar las celdas (triángulos) de la malla
+    self.cells = vtk.vtkCellArray()
+    for i in range(len(self.facets)):
+        triangle = vtk.vtkTriangle()
+        triangle.GetPointIds().SetId(0, int(self.facets[i][0]))
+        triangle.GetPointIds().SetId(1, int(self.facets[i][1]))
+        triangle.GetPointIds().SetId(2, int(self.facets[i][2]))
+        self.cells.InsertNextCell(triangle)
+    
+    # Actualizar la fuente de datos
+    self.mesh_source = vtk.vtkPolyData()
+    self.mesh_source.SetPoints(self.points)
+    self.mesh_source.SetPolys(self.cells)
+    
+    # Calcular normales
+    normals = vtk.vtkPolyDataNormals()
+    normals.SetInputData(self.mesh_source)
+    normals.ComputePointNormalsOn()
+    normals.ComputeCellNormalsOn()
+    normals.Update()
+    
+    # Actualizar el mapper
+    self.mesh_mapper.SetInputData(normals.GetOutput())
+    
+    # Renderizar
+    self.vtk_widget.GetRenderWindow().Render()
+    
+    # Ajustar la cámara
+    self.renderer.ResetCamera()
 
   def select_mode(self, label="female", flag=0):
     self.body = self.bodies[label]

@@ -3,9 +3,15 @@
 
 import numpy as np
 import sys
+import os
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import QLineEdit, QApplication as qApp
+from PyQt5.QtWidgets import QLineEdit, QApplication
+
+# Establecer entorno para Mayavi
+os.environ['ETS_TOOLKIT'] = 'qt'
+os.environ['QT_API'] = 'pyqt5'
+
 from maya_widget import MayaviQWidget, myAction, IndexedQSlider
 import utils
 
@@ -50,7 +56,7 @@ class HumanShapeAnalysisDemo(QtWidgets.QMainWindow):
     exit = QtWidgets.QAction("Exit", self)
     exit.setShortcut("Ctrl+Q")
     exit.setStatusTip('Exit application')
-    exit.triggered.connect(qApp.quit)
+    exit.triggered.connect(QApplication.quit)
     fileMenu.addAction(exit)
 
     save = QtWidgets.QAction("Save", self)
@@ -65,7 +71,6 @@ class HumanShapeAnalysisDemo(QtWidgets.QMainWindow):
     for i in range(0, len(self.mode)):
       mode = myAction(i, self.mode[i], self)
       mode.myact.connect(self.select_mode)
-      #self.connect(mode, QtCore.SIGNAL('myact(int)'), self.select_mode)
       fileMenu.addAction(mode)
     self.setToolTip('This is a window, or <b>something</b>')
 
@@ -188,12 +193,17 @@ class HumanShapeAnalysisDemo(QtWidgets.QMainWindow):
       for i in range(0, len(self.slider)):
         self.slider[i].valueChangeForwarded.disconnect(
           self.viewer3D.sliderForwardedValueChangeHandler)
-        self.slider[i].setValue(t_data[i] / 3.0 * 100.0)
+        # Extraer el valor escalar del array numpy y convertirlo a entero
+        val = float(t_data[i].item()) if isinstance(t_data[i], np.ndarray) else float(t_data[i])
+        slider_val = int(val / 3.0 * 100.0)
+        self.slider[i].setValue(slider_val)
         self.slider[i].valueChangeForwarded.connect(
           self.viewer3D.sliderForwardedValueChangeHandler)
     except ValueError:
       self.editList[0].setText("Please input.")
       self.editList[1].setText("Please input.")
+    except Exception as e:
+      print(f"Error durante la predicción: {str(e)}")
 
   def closeEvent(self, event):
     self.pre_dialog.close()
@@ -217,7 +227,7 @@ class HumanShapeAnalysisDemo(QtWidgets.QMainWindow):
 
 
 def show_app():
-  app = qApp(sys.argv)
+  app = QApplication(sys.argv)
   win = HumanShapeAnalysisDemo()
   win.show()
   sys.exit(app.exec_())

@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # coding=utf-8
 
-from fancyimpute import MICE
+from fancyimpute import IterativeImputer
 import numpy as np
 import scipy
 import scipy.sparse
@@ -10,30 +10,34 @@ import sys
 import os
 import utils
 
+# Función auxiliar para cargar archivos numpy que podrían ser de Python 2
+def load_numpy_file(file_path):
+    return np.load(file_path, allow_pickle=True)
+
 # A Reshaper provide multiple methods for synthesizing body mesh
 class Reshaper:
   def __init__(self, label="female"):
     self.label_ = label
-    self.facets = np.load(open(os.path.join(utils.MODEL_DIR, "facets.npy"), "rb"))
-    self.normals = np.load(open(os.path.join(utils.MODEL_DIR, "normals.npy"), "rb"))
-    self.mask = np.load(open(os.path.join(utils.MODEL_DIR, "mask.npy"), "rb"))
-    self.rfemask = np.load(open(os.path.join(utils.MODEL_DIR, "%s_rfemask.npy"%label), "rb"))
-    self.rfemat = np.load(open(os.path.join(utils.MODEL_DIR, "%s_rfemat.npy"%label), "rb"))
-    self.m2d = np.load(open(os.path.join(utils.MODEL_DIR, "%s_m2d.npy"%label), "rb"))
-    self.d_basis = np.load(open(os.path.join(utils.MODEL_DIR, "%s_d_basis.npy"%label), "rb"))
-    self.t_measure = np.load(open(os.path.join(utils.MODEL_DIR, "%s_t_measure.npy"%label), "rb"))
-    self.mean_measure = np.load(open(os.path.join(utils.MODEL_DIR, "%s_mean_measure.npy"%label), "rb"))
-    self.mean_deform = np.load(open(os.path.join(utils.MODEL_DIR, "%s_mean_deform.npy"%label), "rb"))
-    self.mean_vertex = np.load(open(os.path.join(utils.MODEL_DIR, "%s_mean_vertex.npy"%label), "rb"))
-    self.std_measure = np.load(open(os.path.join(utils.MODEL_DIR, "%s_std_measure.npy"%label), "rb"))
-    self.std_deform = np.load(open(os.path.join(utils.MODEL_DIR, "%s_std_deform.npy"%label), "rb"))
-    self.cp = np.load(open(os.path.join(utils.MODEL_DIR, "cp.npy"), "rb"))
+    self.facets = load_numpy_file(os.path.join(utils.MODEL_DIR, "facets.npy"))
+    self.normals = load_numpy_file(os.path.join(utils.MODEL_DIR, "normals.npy"))
+    self.mask = load_numpy_file(os.path.join(utils.MODEL_DIR, "mask.npy"))
+    self.rfemask = load_numpy_file(os.path.join(utils.MODEL_DIR, "%s_rfemask.npy"%label))
+    self.rfemat = load_numpy_file(os.path.join(utils.MODEL_DIR, "%s_rfemat.npy"%label))
+    self.m2d = load_numpy_file(os.path.join(utils.MODEL_DIR, "%s_m2d.npy"%label))
+    self.d_basis = load_numpy_file(os.path.join(utils.MODEL_DIR, "%s_d_basis.npy"%label))
+    self.t_measure = load_numpy_file(os.path.join(utils.MODEL_DIR, "%s_t_measure.npy"%label))
+    self.mean_measure = load_numpy_file(os.path.join(utils.MODEL_DIR, "%s_mean_measure.npy"%label))
+    self.mean_deform = load_numpy_file(os.path.join(utils.MODEL_DIR, "%s_mean_deform.npy"%label))
+    self.mean_vertex = load_numpy_file(os.path.join(utils.MODEL_DIR, "%s_mean_vertex.npy"%label))
+    self.std_measure = load_numpy_file(os.path.join(utils.MODEL_DIR, "%s_std_measure.npy"%label))
+    self.std_deform = load_numpy_file(os.path.join(utils.MODEL_DIR, "%s_std_deform.npy"%label))
+    self.cp = load_numpy_file(os.path.join(utils.MODEL_DIR, "cp.npy"))
 
-    loader = np.load(os.path.join(utils.MODEL_DIR, "%s_d2v.npz"%label))
+    loader = np.load(os.path.join(utils.MODEL_DIR, "%s_d2v.npz"%label), allow_pickle=True)
     self.d2v = scipy.sparse.coo_matrix((loader['data'], (loader['row'], loader['col'])),shape=loader['shape'])
     self.lu = scipy.sparse.linalg.splu(self.d2v.transpose().dot(self.d2v).tocsc())
     self.local_mat = []
-    tmp = np.load(open(os.path.join(utils.MODEL_DIR, "%s_local.npy"%label), "rb"))
+    tmp = load_numpy_file(os.path.join(utils.MODEL_DIR, "%s_local.npy"%label))
     for i in range(0, len(tmp)):
       self.local_mat.append(np.array([c for c in tmp[i]]))
 
@@ -106,7 +110,7 @@ class Reshaper:
     if (flag == 1).sum() == self.data.m_num:
       return data
     else:
-      solver = MICE()
+      solver = IterativeImputer()
       return self.imputate(flag, data, solver)
 
   # using imputation for missing data
@@ -114,10 +118,10 @@ class Reshaper:
     output = in_data.copy()
     output.shape = (utils.M_NUM, 1)
     output[~flag] = np.nan
-    solver = MICE()
+    solver = IterativeImputer()
     tmp = self.t_measure.copy()
     tmp = np.column_stack((tmp, output)).transpose()
-    tmp = solver.complete(tmp)
+    tmp = solver.fit_transform(tmp)
     output = np.array(tmp[-1, :]).reshape(utils.M_NUM, 1)
     return output
 

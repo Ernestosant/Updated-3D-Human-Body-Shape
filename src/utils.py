@@ -1,7 +1,8 @@
 import numpy as np
+import os
 
 
-MODEL_DIR = "../release_model"
+MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_model")
 V_NUM = 12500
 F_NUM = 25000
 M_NUM = 19

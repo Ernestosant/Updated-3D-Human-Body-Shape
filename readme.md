@@ -1,5 +1,7 @@
 # 3D Human Body Reshaping with Anthropometric Modeling  
 
+> **Important Note**: This repository is an updated version of the [original 3D-Human-Body-Shape](https://github.com/1900zyh/3D-Human-Body-Shape.git). The original repository was developed for Python 3.5 and had several incompatibilities with newer Python versions and dependencies. This version has been adapted to work with Python 3.11 and current Python ecosystem.
+
 ![creating by deform-based global mapping](https://raw.githubusercontent.com/1900zyh/3D-Human-Body-Shape/master/docs/dg-h.png)
 
 ### [Conference Paper](https://link.springer.com/chapter/10.1007/978-981-10-8530-7_10) | [Arxiv](https://arxiv.org/abs/2104.01762) | [Demo](https://sites.google.com/view/1900zyh/3dhumanbody)
@@ -12,7 +14,7 @@ In ICIMCS 2017 (Oral). <br>
 In this paper, we design a user-friendly and accurate system for 3D human body reshaping with limited anthropometric parameters (e.g., height and weight). Specifically, we leverage MICE technique for missing data imputation and we propose a feature-selection-based local mapping method for accurate shape modeling. The proposed feature-selection-based local mapping method can select the most relevant parameters for each facet automatically for linear regression learning, which eliminates heavy human efforts for utilizing topology information of body shape, and thus a more approximate body mesh can be obtained.
 
 ## Approach 
-The overview of the proposed 3D human body reshaping system is shown as below. The system consists of three parts, i.e., the Imputer, the Selector and the Mapper in both online stage and offline stage. In offline stage, the Selector takes the dataset of 3D body meshes (a) and corresponding anthropometric parameters (b) as inputs to learn the relevance masks (c) by the proposed feature-selection-based local mapping technique. The mapping matrices (d) are further learned by linear regression from the parameters selected by (c) to mesh-based body representation. In online stage, MICE is leveraged in the Imputer for the imputation of the parameters from user input (e), which is introduced in Sect. 2.1. ‘?’ in (e) indicates the missing parameters from user inputs, yet could be complemented in (f) by the proposed approach. After imputation, the vector of parameters (f) will be passed to the Mapper. By adopting (c) and (d), 3D body mesh (g) will be generated from (f) in the Mapper.
+The overview of the proposed 3D human body reshaping system is shown as below. The system consists of three parts, i.e., the Imputer, the Selector and the Mapper in both online stage and offline stage. In offline stage, the Selector takes the dataset of 3D body meshes (a) and corresponding anthropometric parameters (b) as inputs to learn the relevance masks (c) by the proposed feature-selection-based local mapping technique. The mapping matrices (d) are further learned by linear regression from the parameters selected by (c) to mesh-based body representation. In online stage, MICE is leveraged in the Imputer for the imputation of the parameters from user input (e), which is introduced in Sect. 2.1. '?' in (e) indicates the missing parameters from user inputs, yet could be complemented in (f) by the proposed approach. After imputation, the vector of parameters (f) will be passed to the Mapper. By adopting (c) and (d), 3D body mesh (g) will be generated from (f) in the Mapper.
 
 ![framework](https://raw.githubusercontent.com/1900zyh/3D-Human-Body-Shape/master/docs/framework.PNG)
 
@@ -42,8 +44,8 @@ please generously cite and star us :kissing_heart: :kissing_heart: :kissing_hear
 ## Quick start
 
 ### Environment  
-1. Windows/OSX/Linux, python3.5
-2. install all packages you need from [.whl files](https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyqt4) or by running:
+1. Windows/OSX/Linux, Python 3.11
+2. Install dependencies:
 ```
 pip install -r requirements.txt
 ```
