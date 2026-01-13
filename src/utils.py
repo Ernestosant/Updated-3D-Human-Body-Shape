@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import open3d as o3d
 
 
 MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "release_model")
@@ -103,3 +104,66 @@ def calc_measure(cp, vertex, facet):
       length += np.sqrt(np.sum((p1 - p2)**2.0))
     measure_list.append(length * 1000)
   return np.array(measure_list).reshape(M_NUM, 1)
+
+
+def load_depth_as_pointcloud(filename, fx=1000.0, fy=1000.0, depth_scale=1000.0, stride=2):
+    """
+    Carga un archivo .npy de profundidad y devuelve los vértices (N, 3)
+    listos para ser renderizados por VTK.
+    
+    Args:
+        filename: Ruta al archivo .npy
+        fx, fy: Parámetros intrínsecos focales (aproximados si no se conocen)
+        depth_scale: Factor de escala para normalizar profundidad
+        stride: Submuestreo para reducir puntos (2 = la mitad de resolución)
+    
+    Returns:
+        numpy.ndarray: Array de puntos (N, 3) o None si hay error
+    """
+    if not os.path.exists(filename):
+        print(f"Archivo no encontrado: {filename}")
+        return None
+
+    try:
+        # 1. Cargar datos
+        depth_data = np.load(filename).astype(np.float32)
+        
+        # 2. Validar que sea 2D
+        if depth_data.ndim != 2:
+            print(f"Error: Se esperaba imagen 2D, recibido shape {depth_data.shape}")
+            return None
+        
+        # 3. Convertir a Geometría Open3D
+        height, width = depth_data.shape
+        img_depth = o3d.geometry.Image(depth_data)
+        
+        # 4. Intrínsecos aproximados (centro de imagen)
+        cx, cy = width / 2, height / 2
+        intrinsic = o3d.camera.PinholeCameraIntrinsic(width, height, fx, fy, cx, cy)
+        
+        # 5. Generar Nube de Puntos
+        pcd = o3d.geometry.PointCloud.create_from_depth_image(
+            img_depth, 
+            intrinsic,
+            depth_scale=depth_scale, 
+            depth_trunc=10.0,  # Truncar puntos muy lejanos
+            stride=stride  # Reducir resolución para rendimiento
+        )
+        
+        # 6. Filtrar outliers estadísticos (mejora visualización)
+        if len(pcd.points) > 100:
+            pcd, _ = pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
+        
+        # 7. Centrar la nube de puntos
+        pcd.translate(-pcd.get_center())
+        
+        # 8. Devolver como numpy array
+        points = np.asarray(pcd.points)
+        print(f"[**] Depth map cargado: {len(points)} puntos desde {filename}")
+        return points
+        
+    except Exception as e:
+        print(f"Error procesando depth map: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
