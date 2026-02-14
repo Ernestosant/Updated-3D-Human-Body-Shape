@@ -8,3 +8,4 @@ data/
 *.npy
 *.npz
 venv/
+experiments.ipynb
