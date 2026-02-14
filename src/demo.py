@@ -3,9 +3,16 @@
 
 import numpy as np
 import sys
+import os
+import subprocess
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import QLineEdit, QApplication as qApp
+from PyQt5.QtWidgets import QLineEdit, QApplication
+
+# Establecer entorno para Mayavi
+os.environ['ETS_TOOLKIT'] = 'qt'
+os.environ['QT_API'] = 'pyqt5'
+
 from maya_widget import MayaviQWidget, myAction, IndexedQSlider
 import utils
 
@@ -50,7 +57,7 @@ class HumanShapeAnalysisDemo(QtWidgets.QMainWindow):
     exit = QtWidgets.QAction("Exit", self)
     exit.setShortcut("Ctrl+Q")
     exit.setStatusTip('Exit application')
-    exit.triggered.connect(qApp.quit)
+    exit.triggered.connect(QApplication.quit)
     fileMenu.addAction(exit)
 
     save = QtWidgets.QAction("Save", self)
@@ -59,15 +66,74 @@ class HumanShapeAnalysisDemo(QtWidgets.QMainWindow):
     save.triggered.connect(self.viewer3D.save)
     fileMenu.addAction(save)
 
+    open_mesh = QtWidgets.QAction("Open Mesh...", self)
+    open_mesh.setShortcut("Ctrl+O")
+    open_mesh.setStatusTip('Open external .npy mesh file')
+    open_mesh.triggered.connect(self.open_mesh_file)
+    fileMenu.addAction(open_mesh)
+
+    load_depth = QtWidgets.QAction("Load Depth Map (.npy)", self)
+    load_depth.setShortcut("Ctrl+D")
+    load_depth.setStatusTip('Load a numpy depth map as point cloud')
+    load_depth.triggered.connect(self.load_depth_map_dialog)
+    fileMenu.addAction(load_depth)
+
     self.flag_ = 0
     self.label_ = "female"
     self.mode = {0:"global_mapping", 1:"local_with_mask", 2:"local_with_rfemat"}
     for i in range(0, len(self.mode)):
       mode = myAction(i, self.mode[i], self)
       mode.myact.connect(self.select_mode)
-      #self.connect(mode, QtCore.SIGNAL('myact(int)'), self.select_mode)
       fileMenu.addAction(mode)
     self.setToolTip('This is a window, or <b>something</b>')
+
+  def open_mesh_file(self):
+    """Abre un cuadro de diálogo para seleccionar y cargar un archivo .npy"""
+    options = QtWidgets.QFileDialog.Options()
+    # Intentar establecer el directorio inicial en "Mallas 3D"
+    initial_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "Mallas 3D")
+    if not os.path.exists(initial_dir):
+        initial_dir = ""
+        
+    filepath, _ = QtWidgets.QFileDialog.getOpenFileName(
+        self, "Open Mesh File", initial_dir,
+        "NumPy Files (*.npy);;All Files (*)", options=options)
+    
+    if filepath:
+        success = self.viewer3D.load_external_mesh(filepath)
+        if success:
+            self.statusBar().showMessage(f"Loaded mesh: {os.path.basename(filepath)}")
+            # Desactivar botones de predicción temporalmente o indicar que es modo externo
+            self.setWindowTitle(f"3D Viewer - {os.path.basename(filepath)}")
+        else:
+            self.statusBar().showMessage(f"Failed to load mesh: {os.path.basename(filepath)}")
+
+  def load_depth_map_dialog(self):
+    """Abre un cuadro de diálogo para cargar un archivo .npy como nube de puntos"""
+    options = QtWidgets.QFileDialog.Options()
+    initial_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+        "Mallas 3D"
+    )
+    if not os.path.exists(initial_dir):
+        initial_dir = ""
+        
+    filepath, _ = QtWidgets.QFileDialog.getOpenFileName(
+        self, "Open Depth Map", initial_dir,
+        "Numpy Files (*.npy);;All Files (*)", 
+        options=options
+    )
+
+    if filepath:
+        self.statusBar().showMessage(f"Abriendo visualizador 3D para: {os.path.basename(filepath)}...")
+        
+        # Ejecutar script externo en nuevo proceso
+        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "depth_visualizer.py")
+        try:
+          subprocess.Popen([sys.executable, script_path, filepath])
+        except Exception as e:
+          print(f"Error al lanzar subproceso: {e}")
+          self.statusBar().showMessage(f"Error al abrir visualizador")
 
   def set_radio(self):
     self.radio1 = QtWidgets.QRadioButton('female')
@@ -188,12 +254,17 @@ class HumanShapeAnalysisDemo(QtWidgets.QMainWindow):
       for i in range(0, len(self.slider)):
         self.slider[i].valueChangeForwarded.disconnect(
           self.viewer3D.sliderForwardedValueChangeHandler)
-        self.slider[i].setValue(t_data[i] / 3.0 * 100.0)
+        # Extraer el valor escalar del array numpy y convertirlo a entero
+        val = float(t_data[i].item()) if isinstance(t_data[i], np.ndarray) else float(t_data[i])
+        slider_val = int(val / 3.0 * 100.0)
+        self.slider[i].setValue(slider_val)
         self.slider[i].valueChangeForwarded.connect(
           self.viewer3D.sliderForwardedValueChangeHandler)
     except ValueError:
       self.editList[0].setText("Please input.")
       self.editList[1].setText("Please input.")
+    except Exception as e:
+      print(f"Error durante la predicción: {str(e)}")
 
   def closeEvent(self, event):
     self.pre_dialog.close()
@@ -217,7 +288,7 @@ class HumanShapeAnalysisDemo(QtWidgets.QMainWindow):
 
 
 def show_app():
-  app = qApp(sys.argv)
+  app = QApplication(sys.argv)
   win = HumanShapeAnalysisDemo()
   win.show()
   sys.exit(app.exec_())
