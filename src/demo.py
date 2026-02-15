@@ -41,7 +41,6 @@ class HumanShapeAnalysisDemo(QtWidgets.QMainWindow):
     self.set_slider()
 
     self.mainBox.addLayout(self.box)
-    self.mainBox.addWidget(self.viewer3D)
     self.set_dialog()
     self.resize(650, 650)
 
@@ -53,6 +52,7 @@ class HumanShapeAnalysisDemo(QtWidgets.QMainWindow):
   def set_menu(self):
     menubar = self.menuBar()
     fileMenu = menubar.addMenu('&File')
+    viewMenu = menubar.addMenu('&View')
 
     exit = QtWidgets.QAction("Exit", self)
     exit.setShortcut("Ctrl+Q")
@@ -77,6 +77,32 @@ class HumanShapeAnalysisDemo(QtWidgets.QMainWindow):
     load_depth.setStatusTip('Load a numpy depth map as point cloud')
     load_depth.triggered.connect(self.load_depth_map_dialog)
     fileMenu.addAction(load_depth)
+
+    recenter = QtWidgets.QAction("Recenter View", self)
+    recenter.setShortcut("F")
+    recenter.setStatusTip('Recenter current 3D view')
+    recenter.triggered.connect(self.viewer3D.recenter_camera)
+    viewMenu.addAction(recenter)
+
+    iso_view = QtWidgets.QAction("Isometric View", self)
+    iso_view.setShortcut("Ctrl+1")
+    iso_view.triggered.connect(lambda: self.viewer3D.set_camera_view('iso'))
+    viewMenu.addAction(iso_view)
+
+    front_view = QtWidgets.QAction("Front View", self)
+    front_view.setShortcut("Ctrl+2")
+    front_view.triggered.connect(lambda: self.viewer3D.set_camera_view('front'))
+    viewMenu.addAction(front_view)
+
+    side_view = QtWidgets.QAction("Side View", self)
+    side_view.setShortcut("Ctrl+3")
+    side_view.triggered.connect(lambda: self.viewer3D.set_camera_view('side'))
+    viewMenu.addAction(side_view)
+
+    top_view = QtWidgets.QAction("Top View", self)
+    top_view.setShortcut("Ctrl+4")
+    top_view.triggered.connect(lambda: self.viewer3D.set_camera_view('top'))
+    viewMenu.addAction(top_view)
 
     self.flag_ = 0
     self.label_ = "female"
@@ -170,6 +196,13 @@ class HumanShapeAnalysisDemo(QtWidgets.QMainWindow):
     self.pre_button.setFont(QFont("Arial", 11))
     self.pre_button.clicked.connect(self.show_dialog)
     self.button_box.addWidget(self.pre_button)
+
+    self.recenter_button = QtWidgets.QPushButton("RECENTER")
+    self.recenter_button.setStatusTip('Recenter 3D camera')
+    self.recenter_button.setFont(QFont("Arial", 11))
+    self.recenter_button.clicked.connect(self.viewer3D.recenter_camera)
+    self.button_box.addWidget(self.recenter_button)
+
     self.box.addLayout(self.button_box)
 
   def set_slider(self):
