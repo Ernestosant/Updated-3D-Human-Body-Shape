@@ -4,6 +4,44 @@ import sys
 import os
 import matplotlib.pyplot as plt
 
+
+def _normalize(vec):
+    norm = np.linalg.norm(vec)
+    if norm < 1e-8:
+        return np.array([0.0, 0.0, 1.0], dtype=np.float64)
+    return vec / norm
+
+
+def _apply_view(vis, lookat, front, up, zoom=0.7):
+    ctrl = vis.get_view_control()
+    ctrl.set_lookat(lookat.tolist())
+    ctrl.set_front(_normalize(front).tolist())
+    ctrl.set_up(_normalize(up).tolist())
+    ctrl.set_zoom(float(zoom))
+
+
+def _build_view_setters(vis, pcd):
+    bbox = pcd.get_axis_aligned_bounding_box()
+    center = np.asarray(bbox.get_center(), dtype=np.float64)
+
+    def front_view(_):
+        _apply_view(vis, center, np.array([0.0, -1.0, 0.0]), np.array([0.0, 0.0, 1.0]))
+        return False
+
+    def side_view(_):
+        _apply_view(vis, center, np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]))
+        return False
+
+    def top_view(_):
+        _apply_view(vis, center, np.array([0.0, 0.0, 1.0]), np.array([0.0, 1.0, 0.0]))
+        return False
+
+    def iso_view(_):
+        _apply_view(vis, center, np.array([1.0, -1.0, 0.7]), np.array([0.0, 0.0, 1.0]))
+        return False
+
+    return front_view, side_view, top_view, iso_view
+
 def visualize_depth(file_path):
     print(f"Loading: {file_path}")
     
@@ -87,13 +125,24 @@ def visualize_depth(file_path):
         
         # Visualization
         print("Launching visualizer...")
-        vis = o3d.visualization.Visualizer()
+        vis = o3d.visualization.VisualizerWithKeyCallback()
         vis.create_window(window_name=f"Cleaned 3D View - {os.path.basename(file_path)}", width=1024, height=768, left=50, top=50)
         vis.add_geometry(pcd)
+
+        front_view, side_view, top_view, iso_view = _build_view_setters(vis, pcd)
+        vis.register_key_callback(ord('1'), front_view)
+        vis.register_key_callback(ord('3'), side_view)
+        vis.register_key_callback(ord('7'), top_view)
+        vis.register_key_callback(ord('R'), iso_view)
         
         opt = vis.get_render_option()
         opt.background_color = np.asarray([0.05, 0.05, 0.05])
         opt.point_size = 4.0 # Nice big points
+
+        print("Controles: mouse arrastrar=rotar, rueda=zoom, shift+arrastrar=pan")
+        print("Vistas rápidas: 1=frontal, 3=lateral, 7=superior, R=isométrica/recentrar")
+
+        iso_view(None)
         
         vis.run()
         vis.destroy_window()

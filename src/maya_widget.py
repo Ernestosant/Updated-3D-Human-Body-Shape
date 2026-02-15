@@ -52,6 +52,8 @@ class MayaviQWidget(QtWidgets.QWidget):
     self.renderer = vtk.vtkRenderer()
     self.vtk_widget.GetRenderWindow().AddRenderer(self.renderer)
     self.interactor = self.vtk_widget.GetRenderWindow().GetInteractor()
+    self.interactor_style = vtk.vtkInteractorStyleTrackballCamera()
+    self.interactor.SetInteractorStyle(self.interactor_style)
     
     # Crear la fuente de datos para la malla
     self.mesh_source = vtk.vtkPolyData()
@@ -86,6 +88,8 @@ class MayaviQWidget(QtWidgets.QWidget):
     self.external_loader = DepthMeshLoader()
     self.is_external_mesh = False
     self.external_polydata = None
+    self.camera_initialized = False
+    self.last_save_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
     # --- CONFIGURACIÓN DE NUBE DE PUNTOS (DEPTH MAP) ---
     self.pc_actor = vtk.vtkActor()
@@ -147,9 +151,64 @@ class MayaviQWidget(QtWidgets.QWidget):
     
     # Renderizar
     self.vtk_widget.GetRenderWindow().Render()
-    
-    # Ajustar la cámara
+
+    if not self.camera_initialized:
+        self.recenter_camera()
+        self.camera_initialized = True
+
+  def _get_visible_center_and_scale(self):
+    bounds = self.renderer.ComputeVisiblePropBounds()
+    if bounds is None or bounds[0] > bounds[1]:
+      return np.array([0.0, 0.0, 0.0], dtype=np.float32), 1.0
+
+    center = np.array([
+      (bounds[0] + bounds[1]) * 0.5,
+      (bounds[2] + bounds[3]) * 0.5,
+      (bounds[4] + bounds[5]) * 0.5
+    ], dtype=np.float32)
+
+    size = np.array([
+      bounds[1] - bounds[0],
+      bounds[3] - bounds[2],
+      bounds[5] - bounds[4]
+    ], dtype=np.float32)
+    scale = float(np.max(size))
+    if scale <= 0:
+      scale = 1.0
+    return center, scale
+
+  def recenter_camera(self):
     self.renderer.ResetCamera()
+    self.renderer.ResetCameraClippingRange()
+    self.vtk_widget.GetRenderWindow().Render()
+
+  def set_camera_view(self, view_name='iso'):
+    center, scale = self._get_visible_center_and_scale()
+    distance = scale * 2.2
+    camera = self.renderer.GetActiveCamera()
+
+    if view_name == 'front':
+      position = np.array([center[0], center[1] - distance, center[2]], dtype=np.float32)
+      up = (0.0, 0.0, 1.0)
+    elif view_name == 'side':
+      position = np.array([center[0] + distance, center[1], center[2]], dtype=np.float32)
+      up = (0.0, 0.0, 1.0)
+    elif view_name == 'top':
+      position = np.array([center[0], center[1], center[2] + distance], dtype=np.float32)
+      up = (0.0, 1.0, 0.0)
+    else:
+      position = np.array([
+        center[0] + distance,
+        center[1] - distance,
+        center[2] + distance * 0.8
+      ], dtype=np.float32)
+      up = (0.0, 0.0, 1.0)
+
+    camera.SetFocalPoint(center[0], center[1], center[2])
+    camera.SetPosition(position[0], position[1], position[2])
+    camera.SetViewUp(up[0], up[1], up[2])
+    self.renderer.ResetCameraClippingRange()
+    self.vtk_widget.GetRenderWindow().Render()
 
   def select_mode(self, label="female", flag=0):
     self.is_external_mesh = False
@@ -190,6 +249,7 @@ class MayaviQWidget(QtWidgets.QWidget):
         self.external_polydata = self.external_loader.create_vtk_polydata(vertices, facets)
         self.is_external_mesh = True
         self.update()
+        self.recenter_camera()
         return True
     return False
 
@@ -226,7 +286,6 @@ class MayaviQWidget(QtWidgets.QWidget):
 
     # 5. Hacer visible y refrescar
     self.pc_actor.VisibilityOn()
-    self.renderer.ResetCamera()
     self.vtk_widget.GetRenderWindow().Render()
     print(f"[**] Depth cloud renderizado: {len(numpy_points)} puntos")
 
@@ -246,7 +305,75 @@ class MayaviQWidget(QtWidgets.QWidget):
     print(' [**] update body in %f s' % (time.time() - start))
 
   def save(self):
-    utils.save_obj("result.obj", self.vertices, self.facets+1)
+    if self.is_external_mesh:
+      QtWidgets.QMessageBox.information(
+        self,
+        "Guardar no disponible",
+        "El guardado está habilitado solo para el modelo generado por sliders/predicción."
+      )
+      return
+
+    if self.vertices is None or self.facets is None or self.vertices.size == 0 or self.facets.size == 0:
+      QtWidgets.QMessageBox.warning(
+        self,
+        "Sin malla",
+        "No hay una malla generada para guardar."
+      )
+      return
+
+    initial_dir = self.last_save_dir if os.path.isdir(self.last_save_dir) else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    initial_path = os.path.join(initial_dir, "result.obj")
+    file_filter = "OBJ Files (*.obj);;GLB Files (*.glb)"
+
+    file_path, selected_filter = QtWidgets.QFileDialog.getSaveFileName(
+      self,
+      "Guardar modelo 3D",
+      initial_path,
+      file_filter
+    )
+
+    if not file_path:
+      return
+
+    extension = os.path.splitext(file_path)[1].lower()
+    if extension == "":
+      extension = ".glb" if "GLB" in selected_filter.upper() else ".obj"
+      file_path += extension
+
+    if extension not in [".obj", ".glb"]:
+      QtWidgets.QMessageBox.warning(
+        self,
+        "Formato no soportado",
+        "Solo se permiten archivos .obj o .glb"
+      )
+      return
+
+    if os.path.exists(file_path):
+      reply = QtWidgets.QMessageBox.question(
+        self,
+        "Confirmar sobrescritura",
+        "El archivo ya existe. ¿Deseas sobrescribirlo?",
+        QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        QtWidgets.QMessageBox.No
+      )
+      if reply != QtWidgets.QMessageBox.Yes:
+        return
+
+    try:
+      if extension == ".obj":
+        utils.save_obj(file_path, self.vertices, self.facets + 1)
+      else:
+        utils.save_glb(file_path, self.vertices, self.facets)
+      self.last_save_dir = os.path.dirname(file_path)
+      print('[**] modelo guardado en {}'.format(file_path))
+    except Exception as err:
+      QtWidgets.QMessageBox.critical(
+        self,
+        "Error al guardar",
+        "No fue posible guardar el modelo:\n{}".format(err)
+      )
+      return
+
     output = np.array(utils.calc_measure(self.body.cp, self.vertices, self.facets))
     for i in range(0, utils.M_NUM):
       print("%s: %f" % (utils.M_STR[i], output[i, 0]))

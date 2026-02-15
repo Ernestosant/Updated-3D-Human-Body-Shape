@@ -86,6 +86,19 @@ python demo.py
 4. press 'PREDICT' button to input the numbers(You don't need to fill out the form, the defualt can be estimated)
 <img src="https://raw.githubusercontent.com/1900zyh/3D-Human-Body-Shape/master/docs/fig3.png" width="500" hegiht="313" align=center />
 
+5. 3D navigation (main viewer)
+- Mouse drag: rotate (trackball camera)
+- Mouse wheel: zoom
+- Shift + drag: pan
+- `F` or `RECENTER`: fit/recenter model
+- Quick views from `View` menu: Isometric (`Ctrl+1`), Front (`Ctrl+2`), Side (`Ctrl+3`), Top (`Ctrl+4`)
+
+6. Depth visualizer quick views
+- `1`: front view
+- `3`: side view
+- `7`: top view
+- `R`: isometric/recenter
+
 ### Different Mapping Methods
 1. global mapping
 2. [local_with_mask](https://dl.acm.org/citation.cfm?id=2758217)

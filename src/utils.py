@@ -50,6 +50,29 @@ def save_obj(filename, v, f):
   tmp = v[:, 2]
   print('[**] save obj file in {}, height: {}'.format(filename, tmp.max() - tmp.min()))
 
+
+def save_glb(filename, v, f):
+  mesh = o3d.geometry.TriangleMesh()
+  mesh.vertices = o3d.utility.Vector3dVector(np.asarray(v, dtype=np.float64))
+  mesh.triangles = o3d.utility.Vector3iVector(np.asarray(f, dtype=np.int32))
+  mesh.compute_vertex_normals()
+
+  success = o3d.io.write_triangle_mesh(
+    filename,
+    mesh,
+    write_ascii=False,
+    compressed=False,
+    write_vertex_normals=True,
+    write_vertex_colors=False,
+    write_triangle_uvs=False,
+    print_progress=False
+  )
+  if not success:
+    raise RuntimeError('No se pudo guardar el archivo GLB')
+
+  tmp = v[:, 2]
+  print('[**] save glb file in {}, height: {}'.format(filename, tmp.max() - tmp.min()))
+
 # calculate the corresponding deformation from the input vertex
 def get_deform(vertex, facet, d_inv_mean):
   deform = np.zeros((F_NUM, 9))
