@@ -89,6 +89,7 @@ class MayaviQWidget(QtWidgets.QWidget):
     self.is_external_mesh = False
     self.external_polydata = None
     self.camera_initialized = False
+    self.last_save_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
     # --- CONFIGURACIÓN DE NUBE DE PUNTOS (DEPTH MAP) ---
     self.pc_actor = vtk.vtkActor()
@@ -304,7 +305,75 @@ class MayaviQWidget(QtWidgets.QWidget):
     print(' [**] update body in %f s' % (time.time() - start))
 
   def save(self):
-    utils.save_obj("result.obj", self.vertices, self.facets+1)
+    if self.is_external_mesh:
+      QtWidgets.QMessageBox.information(
+        self,
+        "Guardar no disponible",
+        "El guardado está habilitado solo para el modelo generado por sliders/predicción."
+      )
+      return
+
+    if self.vertices is None or self.facets is None or self.vertices.size == 0 or self.facets.size == 0:
+      QtWidgets.QMessageBox.warning(
+        self,
+        "Sin malla",
+        "No hay una malla generada para guardar."
+      )
+      return
+
+    initial_dir = self.last_save_dir if os.path.isdir(self.last_save_dir) else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    initial_path = os.path.join(initial_dir, "result.obj")
+    file_filter = "OBJ Files (*.obj);;GLB Files (*.glb)"
+
+    file_path, selected_filter = QtWidgets.QFileDialog.getSaveFileName(
+      self,
+      "Guardar modelo 3D",
+      initial_path,
+      file_filter
+    )
+
+    if not file_path:
+      return
+
+    extension = os.path.splitext(file_path)[1].lower()
+    if extension == "":
+      extension = ".glb" if "GLB" in selected_filter.upper() else ".obj"
+      file_path += extension
+
+    if extension not in [".obj", ".glb"]:
+      QtWidgets.QMessageBox.warning(
+        self,
+        "Formato no soportado",
+        "Solo se permiten archivos .obj o .glb"
+      )
+      return
+
+    if os.path.exists(file_path):
+      reply = QtWidgets.QMessageBox.question(
+        self,
+        "Confirmar sobrescritura",
+        "El archivo ya existe. ¿Deseas sobrescribirlo?",
+        QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        QtWidgets.QMessageBox.No
+      )
+      if reply != QtWidgets.QMessageBox.Yes:
+        return
+
+    try:
+      if extension == ".obj":
+        utils.save_obj(file_path, self.vertices, self.facets + 1)
+      else:
+        utils.save_glb(file_path, self.vertices, self.facets)
+      self.last_save_dir = os.path.dirname(file_path)
+      print('[**] modelo guardado en {}'.format(file_path))
+    except Exception as err:
+      QtWidgets.QMessageBox.critical(
+        self,
+        "Error al guardar",
+        "No fue posible guardar el modelo:\n{}".format(err)
+      )
+      return
+
     output = np.array(utils.calc_measure(self.body.cp, self.vertices, self.facets))
     for i in range(0, utils.M_NUM):
       print("%s: %f" % (utils.M_STR[i], output[i, 0]))
